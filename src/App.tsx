@@ -5,6 +5,7 @@ import MovieCard from './components/MovieCard';
 import Spinner from './components/Spinner';
 import './index.css';
 import { useDebounce } from 'react-use';
+import { isPostHogConfigured, posthog, posthogLogger } from './main.tsx';
 
 // Movie type from TMDB
 interface Movie {
@@ -74,7 +75,12 @@ const App = () => {
 
             const data: TrendingResponse = await response.json();
 
-            setTrendingMovies(data.results || []);
+            const results = data.results || [];
+
+            setTrendingMovies(results);
+            posthogLogger.info('trending_movies_loaded', {
+                result_count: results.length
+            });
 
         } catch (error) {
             console.error('TRENDING ERROR:', error);
@@ -140,6 +146,20 @@ const App = () => {
 
             setMoviesList(results);
 
+            if (query.trim()) {
+                if (isPostHogConfigured) {
+                    posthog.capture('movie_search_completed', {
+                        search_length: query.trim().length,
+                        result_count: results.length
+                    });
+                }
+
+                posthogLogger.info('movie_search_results_loaded', {
+                    search_length: query.trim().length,
+                    result_count: results.length
+                });
+            }
+
             // Track results only for actual searches
             if (query.trim() && results.length > 0) {
                 const savedResults = await Promise.all(
@@ -203,7 +223,7 @@ const App = () => {
                     <h2>Trending Movies</h2>
 
                     {trendingMovies.length === 0 ? (
-                        <p>No trending movies yet. Start searching!</p>
+                        <p className="mb-10">No trending movies yet. Start searching!</p>
                     ) : (
                         <ul>
                             {trendingMovies.map((movie, index) => (
